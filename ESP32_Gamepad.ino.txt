@@ -1,0 +1,74 @@
+#include <BleGamepad.h>
+
+// Create BLE Gamepad (old library supports only 3 arguments)
+BleGamepad bleGamepad("ESP32 Gamepad", "ESP32", 100);
+
+// Button pins (12 buttons)
+int buttonPins[12] = {2, 4, 5, 18, 19, 21, 22, 23, 25, 26, 27, 14};
+
+// Joystick analog pins
+int joy1_x = 32;  // Left joystick X-axis
+int joy1_y = 33;  // Left joystick Y-axis
+int joy2_x = 34;  // Right joystick X-axis
+int joy2_y = 35;  // Right joystick Y-axis
+
+// Calibrated center values (from your measurements)
+int centerLX = 1865;
+int centerLY = 1906;
+int centerRX = 1845;
+int centerRY = 1814;    
+
+// Deadzone range (ignores small drift)
+int deadzone = 250;
+
+// Function to map joystick values with deadzone
+int mapWithDeadzone(int value, int minVal, int maxVal, int center, int deadzone) {
+  if (abs(value - center) < deadzone) {
+    return 0;  // inside deadzone → neutral
+  }
+  return map(value, minVal, maxVal, -127, 127);
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  // Configure buttons
+  for (int i = 0; i < 12; i++) {
+    pinMode(buttonPins[i], INPUT_PULLUP);
+  }
+
+  // Start BLE gamepad
+  bleGamepad.begin();
+}
+
+void loop() {
+  if (bleGamepad.isConnected()) {
+
+    // -------- Buttons --------
+    for (int i = 0; i < 12; i++) {
+      if (digitalRead(buttonPins[i]) == LOW) {
+        bleGamepad.press(i + 1);   // Button pressed
+      } else {
+        bleGamepad.release(i + 1); // Button released
+      }
+    }
+
+    // -------- Joysticks --------
+    int lx = analogRead(joy1_x);
+    int ly = analogRead(joy1_y);
+    int rx = analogRead(joy2_x);
+    int ry = analogRead(joy2_y);
+
+    // Apply mapping with deadzone
+    int mappedLX = mapWithDeadzone(lx, 0, 4095, centerLX, deadzone);
+    int mappedLY = -mapWithDeadzone(ly, 0, 4095, centerLY, deadzone); // invert Y
+    int mappedRX = mapWithDeadzone(rx, 0, 4095, centerRX, deadzone);
+    int mappedRY = -mapWithDeadzone(ry, 0, 4095, centerRY, deadzone);
+
+    // Send joystick values
+    bleGamepad.setLeftThumb(mappedLX, mappedLY);
+    bleGamepad.setRightThumb(mappedRX, mappedRY);
+
+    delay(10); // Small delay for stability
+  }
+}
